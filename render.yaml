@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: moveeazy-backend
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false  # You'll set this manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 10000
+
+  - type: web
+    name: moveeazy-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: moveeazy-backend
+          property: host

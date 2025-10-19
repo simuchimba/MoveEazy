@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const db = require('../config/database');
+const { query } = require('../config/database');
 
 // Generate JWT token
 const generateToken = (id, type) => {
@@ -13,8 +13,8 @@ exports.registerUser = async (req, res) => {
     const { name, email, phone, password } = req.body;
 
     // Check if user exists
-    const [existing] = await db.query('SELECT * FROM users WHERE email = ? OR phone = ?', [email, phone]);
-    if (existing.length > 0) {
+    const existing = await query('SELECT * FROM users WHERE email = $1 OR phone = $2', [email, phone]);
+    if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Email or phone already registered' });
     }
 
@@ -22,17 +22,17 @@ exports.registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert user
-    const [result] = await db.query(
-      'INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)',
+    const result = await query(
+      'INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4) RETURNING id',
       [name, email, phone, hashedPassword]
     );
 
-    const token = generateToken(result.insertId, 'user');
+    const token = generateToken(result.rows[0].id, 'user');
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: { id: result.insertId, name, email, phone }
+      user: { id: result.rows[0].id, name, email, phone }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -45,12 +45,12 @@ exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
+    const users = await query('SELECT * FROM users WHERE email = $1', [email]);
+    if (users.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const user = users[0];
+    const user = users.rows[0];
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });

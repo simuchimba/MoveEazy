@@ -1,29 +1,31 @@
-const mysql = require('mysql2');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-// Create connection pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'yango_db',
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+// Create connection pool for PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Get promise-based connection
-const promisePool = pool.promise();
-
 // Test connection
-pool.getConnection((err, connection) => {
+pool.connect((err, client, release) => {
   if (err) {
     console.error('Error connecting to database:', err.message);
     return;
   }
   console.log('✓ Database connected successfully');
-  connection.release();
+  release();
 });
 
-module.exports = promisePool;
+// Helper function to convert MySQL queries to PostgreSQL
+const query = async (text, params) => {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(text, params);
+    return result;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { pool, query };
