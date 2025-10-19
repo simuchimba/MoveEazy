@@ -85,11 +85,11 @@ exports.registerDriver = async (req, res) => {
     } = req.body;
 
     // Check if driver exists
-    const [existing] = await db.query(
-      'SELECT * FROM drivers WHERE email = ? OR phone = ? OR license_number = ? OR vehicle_plate = ?',
+    const existing = await query(
+      'SELECT * FROM drivers WHERE email = $1 OR phone = $2 OR license_number = $3 OR vehicle_plate = $4',
       [email, phone, license_number, vehicle_plate]
     );
-    if (existing.length > 0) {
+    if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Email, phone, license, or vehicle plate already registered' });
     }
 
@@ -97,16 +97,16 @@ exports.registerDriver = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert driver
-    const [result] = await db.query(
+    const result = await query(
       `INSERT INTO drivers (name, email, phone, password, license_number, 
        vehicle_type, vehicle_model, vehicle_plate, vehicle_color) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [name, email, phone, hashedPassword, license_number, vehicle_type, vehicle_model, vehicle_plate, vehicle_color]
     );
 
     res.status(201).json({
       message: 'Driver registration submitted. Awaiting admin approval.',
-      driver: { id: result.insertId, name, email, status: 'pending' }
+      driver: { id: result.rows[0].id, name, email, status: 'pending' }
     });
   } catch (error) {
     console.error('Driver registration error:', error);
@@ -119,12 +119,12 @@ exports.loginDriver = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const [drivers] = await db.query('SELECT * FROM drivers WHERE email = ?', [email]);
-    if (drivers.length === 0) {
+    const drivers = await query('SELECT * FROM drivers WHERE email = $1', [email]);
+    if (drivers.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const driver = drivers[0];
+    const driver = drivers.rows[0];
 
     if (driver.status === 'pending') {
       return res.status(403).json({ error: 'Account pending approval' });
@@ -166,12 +166,12 @@ exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const [admins] = await db.query('SELECT * FROM admins WHERE email = ?', [email]);
-    if (admins.length === 0) {
+    const admins = await query('SELECT * FROM admins WHERE email = $1', [email]);
+    if (admins.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const admin = admins[0];
+    const admin = admins.rows[0];
     const validPassword = await bcrypt.compare(password, admin.password);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
